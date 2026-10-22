@@ -1,0 +1,192 @@
+{
+ "resourceSpans": [
+  {
+   "resource": {
+    "attributes": [
+     {
+      "key": "service.name",
+      "value": {
+       "stringValue": "agent-sdk"
+      }
+     }
+    ]
+   },
+   "scopeSpans": [
+    {
+     "scope": {
+      "name": "opentelemetry.instrumentation.openai_v2",
+      "version": "0.40.0"
+     },
+     "spans": [
+      {
+       "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+       "spanId": "00f067aa0ba902b7",
+       "parentSpanId": "",
+       "name": "invoke_agent travel_planner",
+       "kind": 1,
+       "startTimeUnixNano": "1761148800000000000",
+       "endTimeUnixNano": "1761148803000000000",
+       "attributes": [
+        {
+         "key": "gen_ai.operation.name",
+         "value": {
+          "stringValue": "invoke_agent"
+         }
+        },
+        {
+         "key": "gen_ai.agent.name",
+         "value": {
+          "stringValue": "travel_planner"
+         }
+        },
+        {
+         "key": "gen_ai.provider.name",
+         "value": {
+          "stringValue": "openai"
+         }
+        },
+        {
+         "key": "gen_ai.conversation.id",
+         "value": {
+          "stringValue": "conv-123"
+         }
+        }
+       ]
+      },
+      {
+       "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+       "spanId": "00f067aa0ba902b8",
+       "parentSpanId": "00f067aa0ba902b7",
+       "name": "chat gpt-4.1",
+       "kind": 3,
+       "startTimeUnixNano": "1761148800010000000",
+       "endTimeUnixNano": "1761148801500000000",
+       "attributes": [
+        {
+         "key": "gen_ai.operation.name",
+         "value": {
+          "stringValue": "chat"
+         }
+        },
+        {
+         "key": "gen_ai.provider.name",
+         "value": {
+          "stringValue": "openai"
+         }
+        },
+        {
+         "key": "gen_ai.request.model",
+         "value": {
+          "stringValue": "gpt-4.1"
+         }
+        },
+        {
+         "key": "gen_ai.request.temperature",
+         "value": {
+          "doubleValue": 0.2
+         }
+        },
+        {
+         "key": "gen_ai.input.messages",
+         "value": {
+          "stringValue": "[{\"role\": \"user\", \"parts\": [{\"type\": \"text\", \"content\": \"Plan 3 days in Lisbon\"}]}]"
+         }
+        },
+        {
+         "key": "gen_ai.output.messages",
+         "value": {
+          "stringValue": "[{\"role\": \"assistant\", \"parts\": [{\"type\": \"tool_call\", \"name\": \"search_flights\", \"arguments\": {\"to\": \"LIS\"}}], \"finish_reason\": \"tool_call\"}]"
+         }
+        },
+        {
+         "key": "gen_ai.usage.input_tokens",
+         "value": {
+          "intValue": "50"
+         }
+        },
+        {
+         "key": "gen_ai.usage.output_tokens",
+         "value": {
+          "intValue": "30"
+         }
+        }
+       ]
+      },
+      {
+       "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+       "spanId": "00f067aa0ba902b9",
+       "parentSpanId": "00f067aa0ba902b7",
+       "name": "execute_tool search_flights",
+       "kind": 1,
+       "startTimeUnixNano": "1761148801600000000",
+       "endTimeUnixNano": "1761148802000000000",
+       "attributes": [
+        {
+         "key": "gen_ai.operation.name",
+         "value": {
+          "stringValue": "execute_tool"
+         }
+        },
+        {
+         "key": "gen_ai.tool.name",
+         "value": {
+          "stringValue": "search_flights"
+         }
+        },
+        {
+         "key": "gen_ai.tool.call.arguments",
+         "value": {
+          "stringValue": "{\"to\": \"LIS\"}"
+         }
+        },
+        {
+         "key": "gen_ai.tool.call.result",
+         "value": {
+          "stringValue": "{\"flights\": 3}"
+         }
+        }
+       ]
+      },
+      {
+       "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+       "spanId": "00f067aa0ba902ba",
+       "parentSpanId": "00f067aa0ba902b7",
+       "name": "chat gpt-4.1",
+       "kind": 1,
+       "startTimeUnixNano": "1761148802100000000",
+       "endTimeUnixNano": "0",
+       "attributes": [
+        {
+         "key": "gen_ai.operation.name",
+         "value": {
+          "stringValue": "chat"
+         }
+        },
+        {
+         "key": "gen_ai.request.model",
+         "value": {
+          "stringValue": "gpt-4.1"
+         }
+        }
+       ],
+       "events": [
+        {
+         "timeUnixNano": "1761148802100000001",
+         "name": "gen_ai.user.message",
+         "attributes": [
+          {
+           "key": "content",
+           "value": {
+            "stringValue": "Book the cheapest one"
+           }
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

@@ -12,7 +12,12 @@ use crate::pricing::Pricing;
 use crate::row::SpanRow;
 
 /// Resource attributes that select a project when the request is not authenticated.
-pub const PROJECT_ATTRIBUTES: [&str; 3] = ["forge.project", "langsmith.project", "project.name"];
+pub const PROJECT_ATTRIBUTES: [&str; 4] = [
+    "forge.project",
+    "openinference.project.name",
+    "langsmith.project",
+    "project.name",
+];
 
 pub fn any_value_to_json(v: &AnyValue) -> Value {
     match &v.value {

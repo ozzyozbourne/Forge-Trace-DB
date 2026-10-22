@@ -371,6 +371,32 @@ impl IndexReader for FtsReader {
     }
 }
 
+/// Human-readable summary of a sidecar, for `forge inspect`.
+pub fn describe(b: &[u8]) -> Result<String> {
+    let d = FtsDictionary::from_bytes(b)?;
+    let mut out = format!(
+        "fts version {}, {} rows, {} terms, dictionary {} bytes, postings {} bytes\n",
+        d.footer.version,
+        d.footer.num_rows,
+        d.footer.num_terms,
+        d.footer.fst_len,
+        d.footer.fst_offset
+    );
+    let mut per_col: BTreeMap<String, usize> = BTreeMap::new();
+    let mut stream = d.fst.keys();
+    use fst::Streamer;
+    while let Some(k) = stream.next() {
+        let col = k.split(|b| *b == 0).next().unwrap_or_default();
+        *per_col
+            .entry(String::from_utf8_lossy(col).into_owned())
+            .or_default() += 1;
+    }
+    for (c, n) in per_col {
+        out.push_str(&format!("  {c}: {n} terms\n"));
+    }
+    Ok(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

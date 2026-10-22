@@ -56,7 +56,7 @@ url = "2"
 base64 = "0.22"
 rand = "0.9"
 prometheus = { version = "0.14", default-features = false }
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "blocking"] }
 proptest = "1"
 tempfile = "3"
 criterion = "0.7"

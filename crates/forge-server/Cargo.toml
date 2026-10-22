@@ -8,12 +8,23 @@ license.workspace = true
 [dependencies]
 anyhow.workspace = true
 axum.workspace = true
+bytes.workspace = true
+forge-index.workspace = true
+forge-ingest.workspace = true
 forge-meta.workspace = true
 forge-model.workspace = true
 forge-storage.workspace = true
+futures.workspace = true
+hex.workspace = true
+moka.workspace = true
+prost.workspace = true
+rand.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
 tokio.workspace = true
+tonic.workspace = true
+tower-http.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
