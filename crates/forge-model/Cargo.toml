@@ -1,0 +1,27 @@
+[package]
+name = "forge-model"
+description = "Forge spans schema, normalization, version merging and shared interfaces"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+arrow.workspace = true
+futures.workspace = true
+async-trait.workspace = true
+base64.workspace = true
+bytes.workspace = true
+prost.workspace = true
+chrono.workspace = true
+hex.workspace = true
+opentelemetry-proto.workspace = true
+roaring.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+toml.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true

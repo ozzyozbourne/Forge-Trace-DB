@@ -1,0 +1,30 @@
+[package]
+name = "forge-storage"
+description = "Forge storage: object store access, Vortex segments, blobs and the read cache"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+arrow.workspace = true
+async-trait.workspace = true
+bytes.workspace = true
+chrono.workspace = true
+forge-model.workspace = true
+futures.workspace = true
+moka.workspace = true
+object_store.workspace = true
+parking_lot.workspace = true
+roaring.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+hex.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+ulid.workspace = true
+url.workspace = true
+vortex.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

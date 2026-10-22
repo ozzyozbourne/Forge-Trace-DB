@@ -1,0 +1,21 @@
+[package]
+name = "forge-meta"
+description = "Forge metastore: the list of live segments, projects, trace index and compaction jobs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+forge-model.workspace = true
+hex.workspace = true
+parking_lot.workspace = true
+rusqlite.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+ulid.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

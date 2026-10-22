@@ -1,0 +1,25 @@
+[package]
+name = "forge-index"
+description = "Forge inverted index: tokenizer, FST + roaring sidecar build and lookup"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+arrow.workspace = true
+async-trait.workspace = true
+bytes.workspace = true
+forge-model.workspace = true
+fst.workspace = true
+futures.workspace = true
+moka.workspace = true
+roaring.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+unicode-normalization.workspace = true
+unicode-segmentation.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+tokio.workspace = true

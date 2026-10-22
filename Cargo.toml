@@ -1,0 +1,62 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+rust-version = "1.95"
+repository = "https://github.com/ozzyozbourne/Forge-Trace-DB"
+
+[workspace.dependencies]
+forge-model = { path = "crates/forge-model" }
+forge-ingest = { path = "crates/forge-ingest" }
+forge-storage = { path = "crates/forge-storage" }
+forge-meta = { path = "crates/forge-meta" }
+forge-index = { path = "crates/forge-index" }
+forge-query = { path = "crates/forge-query" }
+forge-server = { path = "crates/forge-server" }
+
+# Pinned so that the code we read in the registry sources matches what we compile against.
+arrow = { version = "=59.3.1", default-features = false, features = ["ipc", "prettyprint", "json"] }
+datafusion = { version = "=55.2.0", default-features = false, features = ["nested_expressions", "string_expressions", "datetime_expressions", "unicode_expressions", "regex_expressions", "crypto_expressions", "encoding_expressions", "sql"] }
+vortex = { version = "=0.89.0", default-features = false, features = ["files", "tokio", "object_store", "zstd"] }
+object_store = { version = "0.13.2", features = ["aws", "gcp", "azure"] }
+opentelemetry-proto = { version = "0.33", default-features = false, features = ["gen-tonic", "trace", "with-serde"] }
+tonic = { version = "0.14", features = ["gzip", "zstd"] }
+prost = "0.14"
+axum = { version = "0.8", features = ["macros"] }
+tower-http = { version = "0.6", features = ["decompression-gzip", "limit", "trace"] }
+tokio = { version = "1", features = ["full"] }
+futures = "0.3"
+async-trait = "0.1"
+bytes = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+toml = "0.9"
+thiserror = "2"
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+clap = { version = "4", features = ["derive", "env"] }
+rusqlite = { version = "0.40", features = ["bundled"] }
+parking_lot = "0.12"
+ulid = "1"
+chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
+sha2 = "0.10"
+hex = "0.4"
+crc32fast = "1"
+fst = "0.4"
+roaring = "0.11"
+unicode-segmentation = "1"
+unicode-normalization = "0.1"
+moka = { version = "0.12", features = ["sync", "future"] }
+url = "2"
+base64 = "0.22"
+rand = "0.9"
+prometheus = { version = "0.14", default-features = false }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+proptest = "1"
+tempfile = "3"
+criterion = "0.7"

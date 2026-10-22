@@ -1,0 +1,41 @@
+# Example Forge configuration. Every key can be overridden by FORGE_<SECTION>_<KEY>,
+# e.g. FORGE_STORAGE_URL=s3://bucket/prefix. `forge serve --data-dir DIR` points
+# storage, metastore, WAL and cache at one directory.
+
+[server]
+otlp_grpc_addr = "0.0.0.0:4317"
+otlp_http_addr = "0.0.0.0:4318"
+api_addr = "0.0.0.0:8080"
+metrics_addr = "0.0.0.0:9090"
+
+[storage]
+url = "file:///var/lib/forge/data"   # or s3://bucket/prefix, gs://…, az://…, memory://
+
+[metastore]
+url = "sqlite:///var/lib/forge/meta.db"
+
+[wal]
+mode = "local"   # local | object_store
+dir = "/var/lib/forge/wal"
+
+[memtable]
+flush_bytes = "64MiB"
+flush_interval = "30s"
+memory_budget = "1GiB"
+
+[cache]
+memory = "512MiB"
+disk = "10GiB"
+disk_dir = "/var/lib/forge/cache"
+
+[compaction]
+target_segment = "256MiB"
+concurrency = 2
+
+[query]
+memory_limit = "2GiB"
+timeout = "30s"
+
+[auth]
+enabled = false
+# admin_key = "change-me"
