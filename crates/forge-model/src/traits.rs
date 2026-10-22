@@ -183,6 +183,9 @@ pub struct ScanPredicate {
     /// Exclusive.
     pub start_max: Option<i64>,
     pub roots_only: bool,
+    /// Inclusive trace id range (compaction works through a partition range by range).
+    pub trace_min: Option<TraceId>,
+    pub trace_max: Option<TraceId>,
 }
 
 impl ScanPredicate {

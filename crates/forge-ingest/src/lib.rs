@@ -2,6 +2,7 @@
 //! lifecycle tasks (compaction, retention, garbage collection).
 
 pub mod ingester;
+pub mod lifecycle;
 pub mod memtable;
 pub mod wal;
 pub mod writer;

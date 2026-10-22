@@ -107,18 +107,39 @@ pub async fn write_partition(
     batch: &RecordBatch,
     build_index: bool,
 ) -> Result<NewSegment> {
+    let t = std::time::Instant::now();
     let sorted = sort_for_segment(batch)?;
     let stored = to_storage(&sorted)?;
+    let sort_time = t.elapsed();
     let (id, path) = paths::new_segment_path(project_id, level, partition_hour);
+    // Encode the segment and build its index concurrently.
+    let index_input = stored.clone();
+    let index = build_index.then(|| {
+        tokio::task::spawn_blocking(move || forge_index::build(std::slice::from_ref(&index_input)))
+    });
+    let t = std::time::Instant::now();
     let written = store.write_segment(&path, &stored).await?;
-    let fts_path = if build_index {
-        let fts = forge_index::build(std::slice::from_ref(&stored))?;
-        let p = paths::fts_path(&path);
-        store.put_object(&p, fts).await?;
-        Some(p)
-    } else {
-        None
+    let write_time = t.elapsed();
+    let t = std::time::Instant::now();
+    let fts_path = match index {
+        Some(task) => {
+            let fts = task
+                .await
+                .map_err(|e| forge_model::ForgeError::internal(e.to_string()))??;
+            let p = paths::fts_path(&path);
+            store.put_object(&p, fts).await?;
+            Some(p)
+        }
+        None => None,
     };
+    tracing::debug!(
+        rows = batch.num_rows(),
+        bytes = written.byte_size,
+        sort_ms = sort_time.as_millis() as u64,
+        write_ms = write_time.as_millis() as u64,
+        index_wait_ms = t.elapsed().as_millis() as u64,
+        "wrote segment"
+    );
 
     let start = sorted
         .column(schema::col_idx(schema::START_TIME))

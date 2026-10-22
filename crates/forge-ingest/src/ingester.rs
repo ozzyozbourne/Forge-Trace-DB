@@ -95,7 +95,12 @@ impl Ingester {
             rotation: tokio::sync::RwLock::new(()),
             flush_lock: Mutex::new(()),
             version: AtomicI64::new(max_version),
-            dotted_cache: moka::sync::Cache::new(1_000_000),
+            dotted_cache: moka::sync::Cache::builder()
+                .weigher(|k: &(String, TraceId, SpanId), v: &String| {
+                    (k.0.len() + v.len() + 64) as u32
+                })
+                .max_capacity(64 << 20)
+                .build(),
             stats: IngestStats::default(),
         }))
     }

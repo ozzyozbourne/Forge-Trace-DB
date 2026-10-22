@@ -300,6 +300,89 @@ pub fn now_ns() -> u64 {
     forge_model::now_ns() as u64
 }
 
+/// Send generated traces to a running server's OTLP/HTTP endpoint, optionally rate-limited.
+pub async fn ingest_http(
+    target: &str,
+    o: &GenOptions,
+    concurrency: usize,
+    rate: Option<f64>,
+    duration: Option<Duration>,
+) -> anyhow::Result<(u64, Duration)> {
+    use prost::Message;
+    let started = Instant::now();
+    let url = format!("{}/v1/traces", target.trim_end_matches('/'));
+    let client = reqwest::Client::new();
+    let (tx, rx) = async_channel(concurrency * 4);
+    let o2 = o.clone();
+    let deadline = duration.map(|d| started + d);
+    let producer = tokio::task::spawn_blocking(move || {
+        let mut rng = StdRng::seed_from_u64(o2.seed);
+        let mut t = 0u64;
+        loop {
+            if deadline.is_none() && t as usize >= o2.traces {
+                return;
+            }
+            if deadline.is_some_and(|d| Instant::now() >= d) {
+                return;
+            }
+            let spans = gen_trace(&o2, &mut rng, t, now_ns() - 60_000_000_000);
+            for r in requests(&o2, spans) {
+                if tx.send_blocking(r).is_err() {
+                    return;
+                }
+            }
+            t += 1;
+        }
+    });
+    let sent = Arc::new(std::sync::atomic::AtomicU64::new(0));
+    let mut workers = Vec::new();
+    for _ in 0..concurrency {
+        let rx = rx.clone();
+        let client = client.clone();
+        let url = url.clone();
+        let sent = sent.clone();
+        workers.push(tokio::spawn(async move {
+            while let Ok(req) = rx.recv().await {
+                let n = req.resource_spans[0].scope_spans[0].spans.len() as u64;
+                if let Some(rate) = rate {
+                    // Pace globally: wait until this batch is due.
+                    let due = sent.load(std::sync::atomic::Ordering::Relaxed) as f64 / rate;
+                    let now = started.elapsed().as_secs_f64();
+                    if due > now {
+                        tokio::time::sleep(Duration::from_secs_f64(due - now)).await;
+                    }
+                }
+                let body = req.encode_to_vec();
+                loop {
+                    let r = client
+                        .post(&url)
+                        .header("content-type", "application/x-protobuf")
+                        .body(body.clone())
+                        .send()
+                        .await?;
+                    if r.status().as_u16() == 429 {
+                        tokio::time::sleep(Duration::from_millis(50)).await;
+                        continue;
+                    }
+                    anyhow::ensure!(r.status().is_success(), "server returned {}", r.status());
+                    break;
+                }
+                sent.fetch_add(n, std::sync::atomic::Ordering::Relaxed);
+            }
+            Ok::<(), anyhow::Error>(())
+        }));
+    }
+    drop(rx);
+    producer.await?;
+    for w in workers {
+        w.await??;
+    }
+    Ok((
+        sent.load(std::sync::atomic::Ordering::Relaxed),
+        started.elapsed(),
+    ))
+}
+
 /// Ingest in-process through the full normalize → WAL → memtable path.
 pub async fn ingest(
     forge: &Arc<Forge>,

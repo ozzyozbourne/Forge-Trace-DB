@@ -161,6 +161,9 @@ pub struct CompactionConfig {
     pub gc_grace: HumanDuration,
     /// Unreferenced objects older than this are orphans.
     pub orphan_age: HumanDuration,
+    /// Upper bound on input rows merged in memory at once; partitions are processed in
+    /// trace-id ranges of at most this many rows.
+    pub max_rows_per_merge: usize,
     pub enabled: bool,
 }
 
@@ -173,6 +176,7 @@ impl Default for CompactionConfig {
             min_l0_segments: 8,
             gc_grace: HumanDuration(Duration::from_secs(300)),
             orphan_age: HumanDuration(Duration::from_secs(24 * 3600)),
+            max_rows_per_merge: 200_000,
             enabled: true,
         }
     }

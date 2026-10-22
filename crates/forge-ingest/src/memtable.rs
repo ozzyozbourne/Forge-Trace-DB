@@ -227,6 +227,11 @@ fn filter_mask(batch: &RecordBatch, p: &ScanPredicate) -> Option<arrow::array::B
                 if p.roots_only && parent.is_valid(i) {
                     return Some(false);
                 }
+                if p.trace_min.is_some_and(|t| trace.value(i) < t.as_slice())
+                    || p.trace_max.is_some_and(|t| trace.value(i) > t.as_slice())
+                {
+                    return Some(false);
+                }
                 Some(true)
             })
             .collect(),

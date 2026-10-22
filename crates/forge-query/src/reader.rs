@@ -71,7 +71,20 @@ impl ReadPlan {
     /// Whether rows from different inputs may share a key. Compacted (L1) segments partition
     /// keys disjointly and hold no tombstones, so they need no merge.
     pub fn needs_merge(&self) -> bool {
-        self.mem.iter().any(|b| b.num_rows() > 0) || self.segments.iter().any(|s| s.level == 0)
+        if self.mem.iter().any(|b| b.num_rows() > 0) || self.segments.iter().any(|s| s.level == 0) {
+            return true;
+        }
+        // L1 runs of an open hour may overlap until the hour's final rewrite.
+        let mut by_part: HashMap<(&str, i64), Vec<&SegmentRecord>> = HashMap::new();
+        for s in &self.segments {
+            by_part
+                .entry((s.project_id.as_str(), s.partition_hour))
+                .or_default()
+                .push(s);
+        }
+        by_part
+            .values()
+            .any(|segs| forge_ingest::lifecycle::l1_overlap(segs))
     }
 }
 

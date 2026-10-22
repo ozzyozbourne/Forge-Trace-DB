@@ -104,6 +104,12 @@ pub fn predicate_expr(p: &ScanPredicate) -> Option<Expression> {
     if p.roots_only {
         parts.push(expr::is_null(expr::col(schema::PARENT_SPAN_ID)));
     }
+    if let Some(t) = &p.trace_min {
+        parts.push(expr::gt_eq(expr::col(schema::TRACE_ID), bin_lit(t)));
+    }
+    if let Some(t) = &p.trace_max {
+        parts.push(expr::lt_eq(expr::col(schema::TRACE_ID), bin_lit(t)));
+    }
     expr::and_collect(parts)
 }
 

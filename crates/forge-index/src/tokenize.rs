@@ -32,10 +32,22 @@ fn fold(word: &str) -> String {
 /// Split text into normalized tokens, calling `f` for each.
 pub fn for_each_token(text: &str, mut f: impl FnMut(&str)) {
     let text = truncate(text, MAX_FIELD_BYTES);
+    let mut buf = String::with_capacity(32);
     for w in text.unicode_words() {
-        let t = fold(w);
-        if !t.is_empty() && t.len() <= MAX_TOKEN_BYTES {
-            f(&t);
+        if w.len() > MAX_TOKEN_BYTES * 4 {
+            continue;
+        }
+        if w.is_ascii() {
+            buf.clear();
+            buf.extend(w.chars().map(|c| c.to_ascii_lowercase()));
+            if !buf.is_empty() && buf.len() <= MAX_TOKEN_BYTES {
+                f(&buf);
+            }
+        } else {
+            let t = fold(w);
+            if !t.is_empty() && t.len() <= MAX_TOKEN_BYTES {
+                f(&t);
+            }
         }
     }
 }

@@ -5,6 +5,9 @@ use std::sync::Arc;
 
 mod bench;
 
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 use clap::{Parser, Subcommand};
 use forge_model::config::Config;
 use forge_model::traits::{SegmentFilter, SegmentState, SegmentStore};
@@ -42,6 +45,14 @@ enum Command {
         #[arg(long, env = "FORGE_API_KEY")]
         api_key: Option<String>,
     },
+    /// Compact due partitions now (all of a project's partitions with --project).
+    Compact {
+        #[arg(long)]
+        project: Option<String>,
+    },
+    /// Remove deleted segments past the grace period, orphan objects and expired blobs;
+    /// apply retention first.
+    Gc,
     /// Built-in load generator.
     Bench {
         #[command(subcommand)]
@@ -57,6 +68,15 @@ enum Bench {
         gen_opts: bench::GenOptions,
         #[arg(long, default_value_t = 8)]
         concurrency: usize,
+        /// Send OTLP/HTTP to a running server (its OTLP/HTTP base URL) instead of in-process.
+        #[arg(long)]
+        target: Option<String>,
+        /// Target spans per second (with --target).
+        #[arg(long)]
+        rate: Option<f64>,
+        /// Run for this many seconds instead of a fixed trace count (with --target).
+        #[arg(long)]
+        seconds: Option<u64>,
     },
     /// Load a dataset (plus one large trace), then time the query fast paths.
     Query {
@@ -135,6 +155,18 @@ async fn inspect_segment(config: &Config, path: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
+fn lifecycle(config: &Config) -> anyhow::Result<forge_ingest::lifecycle::LifecycleRef> {
+    let meta = forge_meta::open(&config.metastore.url)?;
+    let store = forge_storage::from_url(&config.storage.url, &config.storage.options)?;
+    let segs: forge_model::traits::SegmentStoreRef =
+        Arc::new(forge_storage::VortexSegmentStore::new(store));
+    Ok(forge_ingest::lifecycle::Lifecycle::new(
+        config.clone(),
+        meta,
+        segs,
+    ))
+}
+
 async fn run_sql(
     config: &Config,
     query: &str,
@@ -191,6 +223,28 @@ async fn run_bench(mut config: Config, what: Bench, has_dir: bool) -> anyhow::Re
         Bench::Ingest {
             gen_opts,
             concurrency,
+            target: Some(target),
+            rate,
+            seconds,
+        } => {
+            let (n, took) = bench::ingest_http(
+                &target,
+                &gen_opts,
+                concurrency,
+                rate,
+                seconds.map(std::time::Duration::from_secs),
+            )
+            .await?;
+            println!(
+                "sent {n} spans in {:.2}s: {:.0} spans/s",
+                took.as_secs_f64(),
+                n as f64 / took.as_secs_f64()
+            );
+        }
+        Bench::Ingest {
+            gen_opts,
+            concurrency,
+            ..
         } => {
             let forge = forge_server::Forge::open(config).await?;
             let stop = tokio::sync::watch::channel(false);
@@ -288,6 +342,18 @@ async fn main() -> anyhow::Result<()> {
             api_key,
         } => run_sql(&config, &query, server, project, api_key).await?,
         Command::Bench { what } => run_bench(config, what, cli.data_dir.is_some()).await?,
+        Command::Compact { project } => {
+            let lc = lifecycle(&config)?;
+            let r = lc.compact(project.as_deref(), project.is_some()).await?;
+            println!("{}", serde_json::to_string_pretty(&r)?);
+        }
+        Command::Gc => {
+            let lc = lifecycle(&config)?;
+            let expired = lc.retention().await?;
+            let mut r = lc.gc().await?;
+            r.partitions_expired = expired;
+            println!("{}", serde_json::to_string_pretty(&r)?);
+        }
         Command::Inspect {
             what: Inspect::Segment { path },
         } => inspect_segment(&config, &path).await?,

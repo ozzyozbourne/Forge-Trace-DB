@@ -15,7 +15,7 @@
 //! Roaring bitmaps already partition row ids into 64K-row containers, which plays the role of
 //! the row groups in the design; each term has a single bitmap.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
 use arrow::array::{Array, AsArray, RecordBatch};
@@ -81,7 +81,8 @@ impl Footer {
 /// Accumulates postings for one segment.
 #[derive(Default)]
 pub struct FtsBuilder {
-    postings: BTreeMap<Vec<u8>, RoaringBitmap>,
+    /// term -> (rows, last row added), so repeated tokens in one row cost one lookup.
+    postings: HashMap<Box<[u8]>, (RoaringBitmap, u32)>,
     rows: u64,
 }
 
@@ -92,8 +93,18 @@ impl FtsBuilder {
 
     pub fn add_text(&mut self, row: u32, column: &str, text: &str) {
         let postings = &mut self.postings;
-        terms_for(column, text, &mut |t| {
-            postings.entry(t).or_default().insert(row);
+        terms_for(column, text, &mut |t| match postings.get_mut(t) {
+            Some((bm, last)) => {
+                if *last != row {
+                    bm.insert(row);
+                    *last = row;
+                }
+            }
+            None => {
+                let mut bm = RoaringBitmap::new();
+                bm.insert(row);
+                postings.insert(t.into(), (bm, row));
+            }
         });
         self.rows = self.rows.max(row as u64 + 1);
     }
@@ -101,6 +112,10 @@ impl FtsBuilder {
     /// Index every row of a batch (logical or storage schema). `offset` is the row id of the
     /// batch's first row within the segment.
     pub fn add_batch(&mut self, batch: &RecordBatch, offset: u32) {
+        self.add_rows(batch, offset, 0..batch.num_rows());
+    }
+
+    fn add_rows(&mut self, batch: &RecordBatch, offset: u32, rows: std::ops::Range<usize>) {
         let schema = batch.schema();
         for col in INDEXED_COLUMNS {
             let Ok(i) = schema.index_of(col) else {
@@ -110,13 +125,29 @@ impl FtsBuilder {
             let Some(strings) = arr.as_string_opt::<i32>() else {
                 continue;
             };
-            for r in 0..strings.len() {
+            for r in rows.clone() {
                 if strings.is_valid(r) {
                     self.add_text(offset + r as u32, col, strings.value(r));
                 }
             }
         }
-        self.rows = self.rows.max(offset as u64 + batch.num_rows() as u64);
+        self.rows = self.rows.max(offset as u64 + rows.end as u64);
+    }
+
+    /// Fold another builder's postings into this one.
+    fn absorb(&mut self, other: FtsBuilder) {
+        for (term, (bm, last)) in other.postings {
+            match self.postings.get_mut(&term) {
+                Some((mine, my_last)) => {
+                    *mine |= bm;
+                    *my_last = (*my_last).max(last);
+                }
+                None => {
+                    self.postings.insert(term, (bm, last));
+                }
+            }
+        }
+        self.rows = self.rows.max(other.rows);
     }
 
     pub fn num_terms(&self) -> usize {
@@ -124,9 +155,15 @@ impl FtsBuilder {
     }
 
     pub fn finish(self) -> Result<Bytes> {
+        let mut terms: Vec<(Box<[u8]>, RoaringBitmap)> = self
+            .postings
+            .into_iter()
+            .map(|(k, (bm, _))| (k, bm))
+            .collect();
+        terms.sort_unstable_by(|a, b| a.0.cmp(&b.0));
         let mut out: Vec<u8> = Vec::new();
         let mut fst = MapBuilder::memory();
-        for (term, bitmap) in &self.postings {
+        for (term, bitmap) in &terms {
             let offset = out.len() as u64;
             bitmap
                 .serialize_into(&mut out)
@@ -146,7 +183,7 @@ impl FtsBuilder {
             num_rows: self.rows,
             fst_offset: out.len() as u64,
             fst_len: fst_bytes.len() as u64,
-            num_terms: self.postings.len() as u64,
+            num_terms: terms.len() as u64,
         };
         out.extend_from_slice(&fst_bytes);
         out.extend_from_slice(&footer.encode());
@@ -154,15 +191,63 @@ impl FtsBuilder {
     }
 }
 
-/// Build a sidecar for a whole segment's rows.
+/// Build a sidecar for a whole segment's rows, using every core.
 pub fn build(batches: &[RecordBatch]) -> Result<Bytes> {
-    let mut b = FtsBuilder::new();
-    let mut offset = 0u32;
-    for batch in batches {
-        b.add_batch(batch, offset);
-        offset += batch.num_rows() as u32;
+    let total: usize = batches.iter().map(|b| b.num_rows()).sum();
+    let threads = std::thread::available_parallelism()
+        .map_or(1, |n| n.get())
+        .min(8);
+    if total < 4096 || threads == 1 {
+        let mut b = FtsBuilder::new();
+        let mut offset = 0u32;
+        for batch in batches {
+            b.add_batch(batch, offset);
+            offset += batch.num_rows() as u32;
+        }
+        return b.finish();
     }
-    b.finish()
+    // Split every batch into row chunks, build chunks on worker threads, then merge.
+    let mut work: Vec<(&RecordBatch, u32, std::ops::Range<usize>)> = Vec::new();
+    let mut offset = 0u32;
+    let chunk = total.div_ceil(threads * 4).max(1024);
+    for batch in batches {
+        let n = batch.num_rows();
+        let mut start = 0;
+        while start < n {
+            let end = (start + chunk).min(n);
+            work.push((batch, offset, start..end));
+            start = end;
+        }
+        offset += n as u32;
+    }
+    let next = std::sync::atomic::AtomicUsize::new(0);
+    let parts: Vec<FtsBuilder> = std::thread::scope(|s| {
+        let handles: Vec<_> = (0..threads)
+            .map(|_| {
+                s.spawn(|| {
+                    let mut b = FtsBuilder::new();
+                    loop {
+                        let i = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        let Some((batch, off, rows)) = work.get(i) else {
+                            break;
+                        };
+                        b.add_rows(batch, *off, rows.clone());
+                    }
+                    b
+                })
+            })
+            .collect();
+        handles
+            .into_iter()
+            .map(|h| h.join().expect("fts worker panicked"))
+            .collect()
+    });
+    let mut parts = parts.into_iter();
+    let mut acc = parts.next().unwrap_or_default();
+    for p in parts {
+        acc.absorb(p);
+    }
+    acc.finish()
 }
 
 /// A loaded footer + term dictionary.
@@ -442,6 +527,26 @@ mod tests {
         assert_eq!(p.len(), 0);
         let d = FtsDictionary::from_bytes(&b).unwrap();
         assert_eq!(d.footer.num_rows, 2000);
+    }
+
+    #[test]
+    fn parallel_build_matches_serial() {
+        let b = batch();
+        let big: Vec<RecordBatch> = (0..6).map(|_| b.clone()).collect();
+        let parallel = build(&big).unwrap();
+        let mut serial = FtsBuilder::new();
+        for (i, part) in big.iter().enumerate() {
+            serial.add_batch(part, (i * part.num_rows()) as u32);
+        }
+        let serial = serial.finish().unwrap();
+        assert_eq!(parallel, serial);
+        assert_eq!(
+            FtsDictionary::from_bytes(&parallel)
+                .unwrap()
+                .footer
+                .num_rows,
+            12_000
+        );
     }
 
     proptest::proptest! {

@@ -33,6 +33,7 @@ pub struct Forge {
     pub vortex: Arc<VortexSegmentStore>,
     pub ingester: IngesterRef,
     pub query: QueryEngine,
+    pub lifecycle: forge_ingest::lifecycle::LifecycleRef,
     pub fts: Arc<forge_index::FtsReader>,
     pub normalizer: Normalizer,
     pub auth: auth::Auth,
@@ -72,6 +73,11 @@ impl Forge {
             ingester.clone(),
             config.query.clone(),
         );
+        let lifecycle = forge_ingest::lifecycle::Lifecycle::new(
+            config.clone(),
+            metastore.clone(),
+            segments.clone(),
+        );
         let auth = auth::Auth::new(
             config.auth.enabled,
             config.auth.admin_key.as_deref(),
@@ -86,6 +92,7 @@ impl Forge {
             vortex,
             ingester,
             query,
+            lifecycle,
             fts,
             auth,
             ready: AtomicBool::new(false),
@@ -127,6 +134,11 @@ pub async fn serve(
 ) -> Result<()> {
     let (stop_tx, stop_rx) = watch::channel(false);
     let flusher = f.ingester.spawn_flusher(stop_rx.clone());
+    let lifecycle = f
+        .config
+        .compaction
+        .enabled
+        .then(|| f.lifecycle.spawn(stop_rx.clone()));
 
     let ops = bind(&f.config.server.metrics_addr, "ops endpoint").await?;
     let otlp_http = bind(&f.config.server.otlp_http_addr, "OTLP/HTTP").await?;
@@ -174,6 +186,9 @@ pub async fn serve(
     let _ = stop_tx.send(true);
     while tasks.join_next().await.is_some() {}
     let _ = flusher.await;
+    if let Some(l) = lifecycle {
+        let _ = l.await;
+    }
     match f.ingester.flush_now().await {
         Ok(n) => tracing::info!(segments = n, "flushed memtables on shutdown"),
         Err(e) => tracing::error!(error = %e, "final flush failed; data remains in the WAL"),

@@ -109,8 +109,9 @@ pub fn walk_json(v: &Value, path: &mut String, f: &mut dyn FnMut(&str, &str)) {
     }
 }
 
-/// All index terms for one column value.
-pub fn terms_for(column: &str, text: &str, out: &mut dyn FnMut(Vec<u8>)) {
+/// All index terms for one column value. The slice passed to `out` is only valid for the
+/// duration of the call.
+pub fn terms_for(column: &str, text: &str, out: &mut dyn FnMut(&[u8])) {
     let text = if text.len() > MAX_FIELD_BYTES {
         let mut end = MAX_FIELD_BYTES;
         while !text.is_char_boundary(end) {
@@ -120,22 +121,41 @@ pub fn terms_for(column: &str, text: &str, out: &mut dyn FnMut(Vec<u8>)) {
     } else {
         text
     };
-    let parsed = if is_json_column(column) {
+    let parsed = if is_json_column(column) && text.trim_start().starts_with(['{', '[']) {
         serde_json::from_str::<Value>(text).ok()
     } else {
         None
     };
+    let mut plain: Vec<u8> = Vec::with_capacity(64);
+    plain.extend_from_slice(column.as_bytes());
+    plain.push(SEP);
+    let base = plain.len();
     match parsed {
-        Some(v) if v.is_object() || v.is_array() => {
+        Some(v) => {
+            let mut qualified: Vec<u8> = Vec::with_capacity(128);
             let mut path = String::from("$");
             walk_json(&v, &mut path, &mut |p, s| {
+                qualified.clear();
+                qualified.extend_from_slice(column.as_bytes());
+                qualified.push(SEP);
+                qualified.extend_from_slice(p.as_bytes());
+                qualified.push(SEP);
+                let qbase = qualified.len();
                 for_each_token(s, |t| {
-                    out(plain_term(column, t));
-                    out(path_term(column, p, t));
+                    plain.truncate(base);
+                    plain.extend_from_slice(t.as_bytes());
+                    out(&plain);
+                    qualified.truncate(qbase);
+                    qualified.extend_from_slice(t.as_bytes());
+                    out(&qualified);
                 });
             });
         }
-        _ => for_each_token(text, |t| out(plain_term(column, t))),
+        None => for_each_token(text, |t| {
+            plain.truncate(base);
+            plain.extend_from_slice(t.as_bytes());
+            out(&plain);
+        }),
     }
 }
 
@@ -235,7 +255,9 @@ pub fn matches(expr: &SearchExpr, text_of: &dyn Fn(&str) -> Option<String>) -> b
     for c in &cols {
         if let Some(t) = text_of(c) {
             terms_for(c, &t, &mut |k| {
-                terms.insert(k);
+                if !terms.contains(k) {
+                    terms.insert(k.to_vec());
+                }
             });
         }
     }
@@ -265,7 +287,7 @@ mod tests {
         terms_for(
             "inputs",
             r#"{"messages":[{"role":"user","content":"Refund please"}]}"#,
-            &mut |t| terms.push(String::from_utf8(t).unwrap().replace('\0', "|")),
+            &mut |t| terms.push(String::from_utf8(t.to_vec()).unwrap().replace('\0', "|")),
         );
         assert!(terms.contains(&"inputs|refund".to_string()));
         assert!(terms.contains(&"inputs|$.messages[*].content|refund".to_string()));
