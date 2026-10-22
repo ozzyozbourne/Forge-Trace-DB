@@ -29,9 +29,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: pip install "moto[server]"
+      - run: python3 -m venv /tmp/moto && /tmp/moto/bin/pip install "moto[server]"
       - run: |
-          moto_server -p 5555 &
+          /tmp/moto/bin/moto_server -p 5555 &
           for i in $(seq 30); do curl -sf http://127.0.0.1:5555/ >/dev/null && break; sleep 1; done
           curl -X PUT http://127.0.0.1:5555/forge-test
       - run: cargo test -p forge-server --test s3
