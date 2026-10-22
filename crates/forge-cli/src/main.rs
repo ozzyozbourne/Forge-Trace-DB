@@ -158,6 +158,22 @@ async fn inspect_segment(config: &Config, path: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Resolves on Ctrl-C or SIGTERM (what `docker stop` and systemd send).
+async fn shutdown_signal() {
+    #[cfg(unix)]
+    {
+        let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("install SIGTERM handler");
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {}
+            _ = term.recv() => {}
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = tokio::signal::ctrl_c().await;
+    tracing::info!("shutting down");
+}
+
 fn lifecycle(config: &Config) -> anyhow::Result<forge_ingest::lifecycle::LifecycleRef> {
     let meta = forge_meta::open(&config.metastore.url)?;
     let store = forge_storage::from_url(&config.storage.url, &config.storage.options)?;
@@ -349,10 +365,7 @@ async fn main() -> anyhow::Result<()> {
     match cli.command {
         Command::Serve => {
             let f = forge_server::Forge::open(config).await?;
-            forge_server::serve(f, async {
-                let _ = tokio::signal::ctrl_c().await;
-            })
-            .await?;
+            forge_server::serve(f, shutdown_signal()).await?;
         }
         Command::Sql {
             query,

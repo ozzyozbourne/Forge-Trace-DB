@@ -29,6 +29,7 @@ struct Running {
     api: String,
     http: String,
     grpc: String,
+    ops: String,
     stop: Option<tokio::sync::oneshot::Sender<()>>,
     handle: tokio::task::JoinHandle<()>,
 }
@@ -71,6 +72,7 @@ async fn start(auth: bool) -> Running {
         api: format!("http://127.0.0.1:{a}"),
         http: format!("http://127.0.0.1:{h}"),
         grpc: format!("http://127.0.0.1:{g}"),
+        ops: format!("http://127.0.0.1:{o}"),
         stop: Some(tx),
         handle,
     }
@@ -254,6 +256,27 @@ async fn otlp_in_json_out() {
         .await
         .unwrap();
     assert_eq!(missing.status(), 404);
+
+    let m = http
+        .get(format!("{}/metrics", s.ops))
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+    assert!(m.contains("forge_ingest_spans_total 4"), "{m}");
+    assert!(m.contains("forge_segments{level=\"0\"} 1"), "{m}");
+    assert!(
+        m.contains(
+            "forge_http_requests_total{listener=\"api\",route=\"/v1/sql\",status=\"400\"} 1"
+        ),
+        "{m}"
+    );
+    assert!(
+        m.contains("forge_http_request_duration_seconds_bucket"),
+        "{m}"
+    );
     s.stop().await;
 }
 

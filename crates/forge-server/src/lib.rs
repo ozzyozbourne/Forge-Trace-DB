@@ -3,6 +3,7 @@
 pub mod api;
 pub mod auth;
 pub mod error;
+pub mod metrics;
 pub mod otlp;
 pub mod runs;
 pub mod search;
@@ -38,6 +39,7 @@ pub struct Forge {
     pub normalizer: Normalizer,
     pub auth: auth::Auth,
     pub cache_stats: Option<Arc<forge_storage::CacheStats>>,
+    pub metrics: metrics::Metrics,
     pub ready: AtomicBool,
 }
 
@@ -101,6 +103,7 @@ impl Forge {
             fts,
             auth,
             cache_stats,
+            metrics: metrics::Metrics::default(),
             ready: AtomicBool::new(false),
         }))
     }
@@ -122,6 +125,7 @@ pub fn ops_router(f: Arc<Forge>) -> Router {
     Router::new()
         .route("/healthz", get(healthz))
         .route("/readyz", get(readyz))
+        .route("/metrics", get(metrics::render))
         .with_state(f)
 }
 

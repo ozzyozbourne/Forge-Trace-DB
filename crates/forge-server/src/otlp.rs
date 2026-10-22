@@ -84,6 +84,10 @@ pub fn http_router(f: Arc<Forge>) -> Router {
         .route("/v1/traces", post(http_export))
         .layer(DefaultBodyLimit::max(limit))
         .layer(tower_http::decompression::RequestDecompressionLayer::new())
+        .layer(axum::middleware::from_fn_with_state(
+            f.clone(),
+            crate::metrics::track_otlp,
+        ))
         .with_state(f)
 }
 

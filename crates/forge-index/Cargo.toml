@@ -21,5 +21,10 @@ unicode-normalization.workspace = true
 unicode-segmentation.workspace = true
 
 [dev-dependencies]
+criterion.workspace = true
 proptest.workspace = true
 tokio.workspace = true
+
+[[bench]]
+name = "fts"
+harness = false

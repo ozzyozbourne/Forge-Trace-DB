@@ -63,7 +63,8 @@ tempfile = "3"
 criterion = "0.7"
 
 [profile.dev]
-debug = "line-tables-only"
+debug = false
+incremental = false
 
 [profile.dev.package."*"]
 debug = false
@@ -71,3 +72,4 @@ debug = false
 [profile.release]
 lto = "thin"
 codegen-units = 4
+strip = "debuginfo"

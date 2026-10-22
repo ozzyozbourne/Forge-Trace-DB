@@ -312,6 +312,10 @@ pub fn router(f: Arc<Forge>) -> Router {
         .route("/v1/projects/{id}/rotate-key", post(rotate_key))
         .layer(DefaultBodyLimit::max(limit))
         .layer(tower_http::decompression::RequestDecompressionLayer::new())
+        .layer(axum::middleware::from_fn_with_state(
+            f.clone(),
+            crate::metrics::track_api,
+        ))
         .with_state(f)
 }
 

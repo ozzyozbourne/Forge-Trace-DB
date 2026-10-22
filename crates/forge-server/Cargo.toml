@@ -19,6 +19,7 @@ forge-storage.workspace = true
 futures.workspace = true
 hex.workspace = true
 moka.workspace = true
+prometheus.workspace = true
 prost.workspace = true
 rand.workspace = true
 serde.workspace = true

@@ -37,3 +37,22 @@ jobs:
       - run: cargo test -p forge-server --test s3
         env:
           FORGE_TEST_S3_ENDPOINT: http://127.0.0.1:5555
+
+  bench:
+    # Builds the criterion benches and records end-to-end numbers for this commit.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo bench --no-run -p forge-model -p forge-index
+      - run: cargo build --release -p forge-cli
+      - name: forge bench
+        run: |
+          {
+            echo '### forge bench (GitHub runner, local disk)'
+            echo '```'
+            ./target/release/forge bench ingest --traces 2000 --spans-per-trace 50
+            ./target/release/forge bench query --traces 2000 --spans-per-trace 50 --big-trace-spans 2000 --iterations 20 --compact
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
