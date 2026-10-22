@@ -37,6 +37,7 @@ pub struct Forge {
     pub fts: Arc<forge_index::FtsReader>,
     pub normalizer: Normalizer,
     pub auth: auth::Auth,
+    pub cache_stats: Option<Arc<forge_storage::CacheStats>>,
     pub ready: AtomicBool,
 }
 
@@ -51,9 +52,13 @@ impl Forge {
     pub async fn open_with(
         config: Config,
         metastore: MetastoreRef,
-        object_store: ObjectStoreRef,
+        base_store: ObjectStoreRef,
     ) -> Result<Arc<Forge>> {
-        let vortex = Arc::new(VortexSegmentStore::new(object_store.clone()));
+        // Retries for everything; the read cache for segments, sidecars and blobs.
+        let layers = forge_storage::layer(base_store, &config)?;
+        let object_store = layers.direct.clone();
+        let cache_stats = layers.cache_stats.clone();
+        let vortex = Arc::new(VortexSegmentStore::new(layers.cached.clone()));
         let segments: SegmentStoreRef = vortex.clone();
         let ingester = Ingester::open(
             config.clone(),
@@ -95,6 +100,7 @@ impl Forge {
             lifecycle,
             fts,
             auth,
+            cache_stats,
             ready: AtomicBool::new(false),
         }))
     }

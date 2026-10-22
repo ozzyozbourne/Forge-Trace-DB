@@ -21,3 +21,19 @@ jobs:
       - run: cargo fmt --all -- --check
       - run: cargo clippy --workspace --all-targets
       - run: cargo test --workspace
+
+  s3:
+    # S3 path (segments, sidecars, object-store WAL) against an S3-compatible mock.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: pip install "moto[server]"
+      - run: |
+          moto_server -p 5555 &
+          for i in $(seq 30); do curl -sf http://127.0.0.1:5555/ >/dev/null && break; sleep 1; done
+          curl -X PUT http://127.0.0.1:5555/forge-test
+      - run: cargo test -p forge-server --test s3
+        env:
+          FORGE_TEST_S3_ENDPOINT: http://127.0.0.1:5555
