@@ -90,6 +90,9 @@ enum Bench {
         /// Skip loading and only time queries on existing data.
         #[arg(long)]
         no_load: bool,
+        /// Compact everything into L1 before timing queries.
+        #[arg(long)]
+        compact: bool,
     },
 }
 
@@ -269,12 +272,17 @@ async fn run_bench(mut config: Config, what: Bench, has_dir: bool) -> anyhow::Re
             big_trace_spans,
             iterations,
             no_load,
+            compact,
         } => {
             let project = gen_opts.project.clone();
             let mut big_trace = None;
             if !no_load {
                 let forge = forge_server::Forge::open(config.clone()).await?;
+                let stop = tokio::sync::watch::channel(false);
+                let flusher = forge.ingester.spawn_flusher(stop.1.clone());
                 let (n, took) = bench::ingest(&forge, &gen_opts, 8).await?;
+                let _ = stop.0.send(true);
+                let _ = flusher.await;
                 println!("loaded {n} spans in {:.2}s", took.as_secs_f64());
                 // One large trace for tree loads.
                 let big = bench::GenOptions {
@@ -295,6 +303,17 @@ async fn run_bench(mut config: Config, what: Bench, has_dir: bool) -> anyhow::Re
                     forge.ingest_otlp(&r, None).await?;
                 }
                 forge.ingester.flush_now().await?;
+                if compact {
+                    let t = std::time::Instant::now();
+                    let r = forge.lifecycle.compact(None, true).await?;
+                    println!(
+                        "compacted {} partitions ({} -> {} segments) in {:.1}s",
+                        r.partitions,
+                        r.inputs,
+                        r.outputs,
+                        t.elapsed().as_secs_f64()
+                    );
+                }
                 let segs = forge.metastore.list_segments(&Default::default()).await?;
                 println!(
                     "{} segments, {} bytes",

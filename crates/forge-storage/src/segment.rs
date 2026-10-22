@@ -187,10 +187,16 @@ impl SegmentStore for VortexSegmentStore {
     async fn scan_segment(&self, segment: &SegmentRecord, req: ScanRequest) -> Result<BatchStream> {
         let file = self.open(&segment.path).await?;
         let full = storage_schema();
-        let columns: Vec<String> = match &req.projection {
+        let mut columns: Vec<String> = match &req.projection {
             Some(p) => p.clone(),
             None => full.fields().iter().map(|f| f.name().clone()).collect(),
         };
+        // A scan with no columns (e.g. count(*)) still needs row counts: read the smallest
+        // column and drop it.
+        let count_only = columns.is_empty();
+        if count_only {
+            columns.push(schema::DELETED.to_string());
+        }
         let names: Vec<&str> = columns.iter().map(String::as_str).collect();
         let out_schema = schema::project_schema(&full, &names);
         let dtype = file.dtype().clone();
@@ -211,7 +217,18 @@ impl SegmentStore for VortexSegmentStore {
             .into_record_batch_stream(out_schema)
             .map_err(verr)?
             .map_err(|e| ForgeError::Internal(anyhow::Error::new(e)))
-            .and_then(|b| async move { Ok(schema::from_storage(&b)?) });
+            .and_then(move |b| async move {
+                if count_only {
+                    let opts =
+                        arrow::array::RecordBatchOptions::new().with_row_count(Some(b.num_rows()));
+                    return Ok(RecordBatch::try_new_with_options(
+                        Arc::new(arrow::datatypes::Schema::empty()),
+                        vec![],
+                        &opts,
+                    )?);
+                }
+                Ok(schema::from_storage(&b)?)
+            });
         Ok(stream.boxed())
     }
 
