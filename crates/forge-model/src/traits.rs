@@ -223,6 +223,9 @@ pub trait SegmentStore: Send + Sync + 'static {
     async fn put_object(&self, path: &str, bytes: bytes::Bytes) -> Result<()>;
     async fn get_object(&self, path: &str) -> Result<bytes::Bytes>;
     async fn get_range(&self, path: &str, range: std::ops::Range<u64>) -> Result<bytes::Bytes>;
+    /// The last `n` bytes of an object (all of it when smaller) and the object's total size,
+    /// in one request.
+    async fn get_suffix(&self, path: &str, n: u64) -> Result<(bytes::Bytes, u64)>;
     async fn delete_object(&self, path: &str) -> Result<()>;
     /// `(path, last_modified_ms, size)` of every object under a prefix.
     async fn list_objects(&self, prefix: &str) -> Result<Vec<(String, i64, u64)>>;

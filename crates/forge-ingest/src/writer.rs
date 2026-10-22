@@ -15,12 +15,15 @@ use forge_storage::paths;
 
 /// Partition hour of each row: its start time, or its ingest time (≈ version) when unknown.
 fn row_hours(batch: &RecordBatch) -> Vec<i64> {
-    let start = batch
-        .column(schema::col_idx(schema::START_TIME))
-        .as_primitive::<TimestampNanosecondType>();
-    let version = batch
-        .column(schema::col_idx(schema::VERSION))
-        .as_primitive::<Int64Type>();
+    let col = |n: &str| {
+        batch
+            .column(batch.schema().index_of(n).expect("column present"))
+            .clone()
+    };
+    let start = col(schema::START_TIME);
+    let start = start.as_primitive::<TimestampNanosecondType>();
+    let version = col(schema::VERSION);
+    let version = version.as_primitive::<Int64Type>();
     (0..batch.num_rows())
         .map(|i| {
             if start.is_valid(i) {
@@ -32,11 +35,13 @@ fn row_hours(batch: &RecordBatch) -> Vec<i64> {
         .collect()
 }
 
-/// Split a logical batch into `(project, hour) -> rows`.
+/// Split a logical batch (any projection containing `project_id`, `start_time` and
+/// `version`) into `(project, hour) -> rows`.
 pub fn partition(batch: &RecordBatch) -> Result<BTreeMap<(String, i64), RecordBatch>> {
     let projects = batch
-        .column(schema::col_idx(schema::PROJECT_ID))
-        .as_string::<i32>();
+        .column(batch.schema().index_of(schema::PROJECT_ID)?)
+        .clone();
+    let projects = projects.as_string::<i32>();
     let hours = row_hours(batch);
     let mut groups: BTreeMap<(String, i64), Vec<u32>> = BTreeMap::new();
     for (i, h) in hours.iter().enumerate() {

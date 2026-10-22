@@ -15,6 +15,11 @@ clap.workspace = true
 forge-index.workspace = true
 forge-meta.workspace = true
 forge-model.workspace = true
+forge-query.workspace = true
+forge-ingest.workspace = true
+rand.workspace = true
+reqwest.workspace = true
+tempfile.workspace = true
 forge-server.workspace = true
 forge-storage.workspace = true
 object_store.workspace = true
@@ -24,8 +29,4 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 
 [dev-dependencies]
-forge-ingest.workspace = true
 prost.workspace = true
-rand.workspace = true
-reqwest.workspace = true
-tempfile.workspace = true

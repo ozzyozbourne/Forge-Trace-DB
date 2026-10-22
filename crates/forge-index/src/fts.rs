@@ -283,18 +283,11 @@ impl FtsReader {
         self.dicts
             .try_get_with(p.clone(), async move {
                 // Footer and dictionary: read the tail, which usually covers both in one GET.
-                let size = store
-                    .list_objects(&p)
-                    .await?
-                    .into_iter()
-                    .find(|(path, _, _)| path == &p)
-                    .map(|(_, _, s)| s)
-                    .ok_or_else(|| ForgeError::NotFound(p.clone()))?;
-                if size < FOOTER_LEN {
+                let (tail, size) = store.get_suffix(&p, 256 * 1024).await?;
+                if size < FOOTER_LEN || (tail.len() as u64) < FOOTER_LEN {
                     return Err(ForgeError::internal("fts sidecar too short"));
                 }
-                let tail_len = size.min(256 * 1024);
-                let tail = store.get_range(&p, size - tail_len..size).await?;
+                let tail_len = tail.len() as u64;
                 let footer = Footer::decode(&tail[tail.len() - FOOTER_LEN as usize..])?;
                 let fst_bytes = if footer.fst_offset >= size - tail_len {
                     let start = (footer.fst_offset - (size - tail_len)) as usize;

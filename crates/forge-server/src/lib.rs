@@ -1,8 +1,11 @@
 //! Forge process assembly and network endpoints: OTLP receivers, the JSON API, ops endpoints.
 
+pub mod api;
 pub mod auth;
 pub mod error;
 pub mod otlp;
+pub mod runs;
+pub mod search;
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -17,6 +20,7 @@ use forge_model::config::Config;
 use forge_model::otlp::Normalizer;
 use forge_model::pricing::Pricing;
 use forge_model::traits::{MetastoreRef, SegmentStoreRef};
+use forge_query::QueryEngine;
 use forge_storage::{ObjectStoreRef, VortexSegmentStore};
 use tokio::net::TcpListener;
 use tokio::sync::watch;
@@ -28,6 +32,8 @@ pub struct Forge {
     pub segments: SegmentStoreRef,
     pub vortex: Arc<VortexSegmentStore>,
     pub ingester: IngesterRef,
+    pub query: QueryEngine,
+    pub fts: Arc<forge_index::FtsReader>,
     pub normalizer: Normalizer,
     pub auth: auth::Auth,
     pub ready: AtomicBool,
@@ -55,6 +61,17 @@ impl Forge {
             object_store.clone(),
         )
         .await?;
+        let fts = Arc::new(forge_index::FtsReader::new(
+            segments.clone(),
+            config.cache.memory.bytes() / 4,
+        ));
+        let query = QueryEngine::new(
+            metastore.clone(),
+            segments.clone(),
+            Some(fts.clone()),
+            ingester.clone(),
+            config.query.clone(),
+        );
         let auth = auth::Auth::new(
             config.auth.enabled,
             config.auth.admin_key.as_deref(),
@@ -68,6 +85,8 @@ impl Forge {
             segments,
             vortex,
             ingester,
+            query,
+            fts,
             auth,
             ready: AtomicBool::new(false),
         }))
@@ -112,6 +131,7 @@ pub async fn serve(
     let ops = bind(&f.config.server.metrics_addr, "ops endpoint").await?;
     let otlp_http = bind(&f.config.server.otlp_http_addr, "OTLP/HTTP").await?;
     let grpc = bind(&f.config.server.otlp_grpc_addr, "OTLP/gRPC").await?;
+    let api = bind(&f.config.server.api_addr, "API").await?;
 
     let wait = |mut rx: watch::Receiver<bool>| async move {
         let _ = rx.wait_for(|v| *v).await;
@@ -124,6 +144,11 @@ pub async fn serve(
     );
     tasks.spawn(
         axum::serve(otlp_http, otlp::http_router(f.clone()))
+            .with_graceful_shutdown(wait(stop_rx.clone()))
+            .into_future(),
+    );
+    tasks.spawn(
+        axum::serve(api, api::router(f.clone()))
             .with_graceful_shutdown(wait(stop_rx.clone()))
             .into_future(),
     );

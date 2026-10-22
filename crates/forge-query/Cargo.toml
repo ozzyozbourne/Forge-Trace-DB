@@ -1,7 +1,29 @@
 [package]
 name = "forge-query"
+description = "Forge query engine: DataFusion spans provider, merge-on-read, UDFs and fast paths"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
+anyhow.workspace = true
+arrow.workspace = true
+async-trait.workspace = true
+base64.workspace = true
+datafusion.workspace = true
+forge-index.workspace = true
+forge-ingest.workspace = true
+forge-model.workspace = true
+forge-storage.workspace = true
+futures.workspace = true
+hex.workspace = true
+roaring.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+forge-meta.workspace = true
+proptest.workspace = true
+tempfile.workspace = true

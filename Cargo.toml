@@ -60,3 +60,13 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 proptest = "1"
 tempfile = "3"
 criterion = "0.7"
+
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+
+[profile.release]
+lto = "thin"
+codegen-units = 4

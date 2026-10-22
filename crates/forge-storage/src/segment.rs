@@ -233,6 +233,20 @@ impl SegmentStore for VortexSegmentStore {
             .map_err(ostore_err)
     }
 
+    async fn get_suffix(&self, path: &str, n: u64) -> Result<(Bytes, u64)> {
+        let opts = object_store::GetOptions {
+            range: Some(object_store::GetRange::Suffix(n)),
+            ..Default::default()
+        };
+        let r = self
+            .store
+            .get_opts(&Path::from(path), opts)
+            .await
+            .map_err(ostore_err)?;
+        let size = r.meta.size;
+        Ok((r.bytes().await.map_err(ostore_err)?, size))
+    }
+
     async fn delete_object(&self, path: &str) -> Result<()> {
         self.files.invalidate(path).await;
         match self.store.delete(&Path::from(path)).await {
